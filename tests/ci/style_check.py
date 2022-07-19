@@ -26,7 +26,6 @@ from git_helper import git_runner
 from pr_info import PRInfo, SKIP_SIMPLE_CHECK_LABEL
 from rerun_helper import RerunHelper
 from s3_helper import S3Helper
-from ssh import SSHKey
 from stopwatch import Stopwatch
 from upload_result_helper import upload_results
 
@@ -98,11 +97,7 @@ def checkout_head(pr_info: PRInfo):
         f"{git_prefix} fetch --depth=1 "
         f"{remote_url} {pr_info.head_ref}:head-{pr_info.head_ref}"
     )
-    if os.getenv("ROBOT_CLICKHOUSE_SSH_KEY", ""):
-        with SSHKey("ROBOT_CLICKHOUSE_SSH_KEY"):
-            git_runner(fetch_cmd)
-    else:
-        git_runner(fetch_cmd)
+    git_runner(fetch_cmd)
     git_runner(f"git checkout -f head-{pr_info.head_ref}")
 
 
@@ -122,11 +117,7 @@ def commit_push_staged(pr_info: PRInfo):
     push_cmd = (
         f"{git_prefix} push {remote_url} head-{pr_info.head_ref}:{pr_info.head_ref}"
     )
-    if os.getenv("ROBOT_CLICKHOUSE_SSH_KEY", ""):
-        with SSHKey("ROBOT_CLICKHOUSE_SSH_KEY"):
-            git_runner(push_cmd)
-    else:
-        git_runner(push_cmd)
+    git_runner(push_cmd)
 
 
 def remote_head_url(pr_info: PRInfo) -> str:
