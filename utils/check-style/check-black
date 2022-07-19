@@ -12,8 +12,8 @@ if ! "${find_cmd[@]}" -exec black --check --diff {} + 1>"$tmp" 2>&1; then
   # Show the result only if some files need formatting
   cat "$tmp"
   # Apply formatting
-  "${find_cmd[@]}" -exec black {} +
+  "${find_cmd[@]}" -exec black {} + 1>/dev/null 2>&1
   # Automatically add changed files to stage
-  "${find_cmd[@]}" -exec git add -u {} +
+  "${find_cmd[@]}" -exec git add -u {} + 1>/dev/null 2>&1
 fi
 rm "$tmp"
