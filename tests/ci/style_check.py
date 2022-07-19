@@ -125,7 +125,7 @@ def commit_push_staged(pr_info: PRInfo):
     remote_url = pr_info.event['pull_request']['base']['repo']['ssh_url']
     git_prefix = (  # All commits to remote are done as robot-clickhouse
         "git -c user.email=robot-clickhouse@clickhouse.com "
-        "-c user.name=robot-clickhouse -c commit.gpgsign=false"
+        "-c user.name=robot-clickhouse -c commit.gpgsign=false "
                   "-c core.sshCommand="
 
                   "'ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'"
