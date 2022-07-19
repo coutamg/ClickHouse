@@ -191,7 +191,7 @@ if __name__ == "__main__":
         test_results,
         state,
         stopwatch.duration_seconds,
-        stopwatch.start_time_str,
+            stopwatch.start_time_str,
         report_url,
         NAME,
     )
