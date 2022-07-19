@@ -135,9 +135,10 @@ def remote_head_url(pr_info: PRInfo) -> str:
     # lines of "origin	git@github.com:ClickHouse/ClickHouse.git (fetch)"
     remotes = git_runner("git remote -v").split("\n")
     remote = tuple(
-        remote.split()[1] for remote in remotes
-                if f"github.com/{pr_info.base_name}" in remote  # https
-                or f"github.com:{pr_info.base_name}" in remote  # ssh
+        remote.split()[1]
+        for remote in remotes
+        if f"github.com/{pr_info.base_name}" in remote  # https
+        or f"github.com:{pr_info.base_name}" in remote  # ssh
     )[0]
     return remote.replace(pr_info.base_name, pr_info.head_name)
 
@@ -182,9 +183,7 @@ if __name__ == "__main__":
     )
 
     if args.push:
-        commit_push_staged(
-            pr_info
-        )
+        commit_push_staged(pr_info)
 
     state, description, test_results, additional_files = process_result(temp_path)
     ch_helper = ClickHouseHelper()
