@@ -26,6 +26,7 @@ from git_helper import git_runner
 from pr_info import PRInfo, SKIP_SIMPLE_CHECK_LABEL
 from rerun_helper import RerunHelper
 from s3_helper import S3Helper
+from ssh import SSHKey
 from stopwatch import Stopwatch
 from upload_result_helper import upload_results
 
@@ -88,7 +89,10 @@ def checkout_head(pr_info: PRInfo):
     # It works ONLY for PRs, and only over ssh, so either
     # ROBOT_CLICKHOUSE_SSH_KEY should be set or ssh-agent should work
     assert pr_info.number
-    remote_url = remote_head_url(pr_info)
+    if not pr_info.head_name == pr_info.base_name:
+        # We can't push to forks, sorry folks
+        return
+    remote_url = pr_info.event['pull_request']['base']['repo']['ssh_url']
     git_prefix = (  # All commits to remote are done as robot-clickhouse
         "git -c user.email=robot-clickhouse@clickhouse.com "
         "-c user.name=robot-clickhouse -c commit.gpgsign=false "
@@ -97,7 +101,11 @@ def checkout_head(pr_info: PRInfo):
         f"{git_prefix} fetch --depth=1 "
         f"{remote_url} {pr_info.head_ref}:head-{pr_info.head_ref}"
     )
-    git_runner(fetch_cmd)
+    if os.getenv("ROBOT_CLICKHOUSE_SSH_KEY", ""):
+        with SSHKey("ROBOT_CLICKHOUSE_SSH_KEY"):
+            git_runner(fetch_cmd)
+    else:
+        git_runner(fetch_cmd)
     git_runner(f"git checkout -f head-{pr_info.head_ref}")
 
 
@@ -105,10 +113,13 @@ def commit_push_staged(pr_info: PRInfo):
     # It works ONLY for PRs, and only over ssh, so either
     # ROBOT_CLICKHOUSE_SSH_KEY should be set or ssh-agent should work
     assert pr_info.number
+    if not pr_info.head_name == pr_info.base_name:
+        # We can't push to forks, sorry folks
+        return
     git_staged = git_runner("git diff --cached --name-only")
     if not git_staged:
         return
-    remote_url = remote_head_url(pr_info)
+    remote_url = pr_info.event['pull_request']['base']['repo']['ssh_url']
     git_prefix = (  # All commits to remote are done as robot-clickhouse
         "git -c user.email=robot-clickhouse@clickhouse.com "
         "-c user.name=robot-clickhouse -c commit.gpgsign=false"
@@ -117,21 +128,11 @@ def commit_push_staged(pr_info: PRInfo):
     push_cmd = (
         f"{git_prefix} push {remote_url} head-{pr_info.head_ref}:{pr_info.head_ref}"
     )
-    git_runner(push_cmd)
-
-
-def remote_head_url(pr_info: PRInfo) -> str:
-    # The function search for pr_info.base_name and returns remote with
-    # replaced base_name by head_name
-    # lines of "origin	git@github.com:ClickHouse/ClickHouse.git (fetch)"
-    remotes = git_runner("git remote -v").split("\n")
-    remote = tuple(
-        remote.split()[1]
-        for remote in remotes
-        if f"github.com/{pr_info.base_name}" in remote  # https
-        or f"github.com:{pr_info.base_name}" in remote  # ssh
-    )[0]
-    return remote.replace(pr_info.base_name, pr_info.head_name)
+    if os.getenv("ROBOT_CLICKHOUSE_SSH_KEY", ""):
+        with SSHKey("ROBOT_CLICKHOUSE_SSH_KEY"):
+            git_runner(push_cmd)
+    else:
+        git_runner(push_cmd)
 
 
 if __name__ == "__main__":
@@ -174,7 +175,9 @@ if __name__ == "__main__":
     )
 
     if args.push:
-        commit_push_staged(pr_info)
+        commit_push_staged(
+            pr_info
+        )
 
     state, description, test_results, additional_files = process_result(temp_path)
     ch_helper = ClickHouseHelper()
