@@ -151,8 +151,10 @@ void AggregatingStep::applyOrder(SortDescription sort_description_for_merging_, 
     explicit_sorting_required_for_aggregation_in_order = false;
 }
 
+// 这里类似与 pg 的 init node 功能
 void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings)
 {
+    // 将 pipeline 保存到当前的 collector 中
     QueryPipelineProcessorsCollector collector(pipeline, this);
 
     /// Forget about current totals and extremes. They will be calculated again after aggregation if needed.
@@ -348,6 +350,7 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
             return processors;
         });
 
+        // collector 又保存到 aggregating 成员变量中
         aggregating = collector.detachProcessors(0);
         return;
     }

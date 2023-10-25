@@ -9,6 +9,7 @@ ISourceStep::ISourceStep(DataStream output_stream_)
     output_stream = std::move(output_stream_);
 }
 
+// 从存储层拉取数据的算子
 QueryPipelineBuilderPtr ISourceStep::updatePipeline(QueryPipelineBuilders, const BuildQueryPipelineSettings & settings)
 {
     auto pipeline = std::make_unique<QueryPipelineBuilder>();
@@ -17,6 +18,7 @@ QueryPipelineBuilderPtr ISourceStep::updatePipeline(QueryPipelineBuilders, const
     /// in `initializePipeline`, but make an assign with new created Pipe.
     /// And Processors for the Step is added here. So we do not need to use
     /// `QueryPipelineProcessorsCollector` to collect Processors.
+    // 初始化 Pipeline
     initializePipeline(*pipeline, settings);
 
     /// But we need to set QueryPlanStep manually for the Processors, which

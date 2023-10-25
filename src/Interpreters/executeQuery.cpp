@@ -714,12 +714,14 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         else if (settings.dialect == Dialect::prql && !internal)
         {
             ParserPRQLQuery parser(max_query_size, settings.max_parser_depth);
+            // 从字符串解析 query
             ast = parseQuery(parser, begin, end, "", max_query_size, settings.max_parser_depth);
         }
         else
         {
             ParserQuery parser(end, settings.allow_settings_after_format_in_insert);
             /// TODO: parser should fail early when max_query_size limit is reached.
+            // 从字符串解析 query
             ast = parseQuery(parser, begin, end, "", max_query_size, settings.max_parser_depth);
         }
 
@@ -869,7 +871,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         /// Load external tables if they were provided
         context->initializeExternalTablesIfSet();
-
+        // 类似 dynamic_cast, 转换不成功则返回 nullptr
         auto * insert_query = ast->as<ASTInsertQuery>();
         bool async_insert_enabled = settings.async_insert;
 
@@ -886,6 +888,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     async_insert_enabled |= table->areAsynchronousInsertsEnabled();
         }
 
+        // insert xxx select 语句
         if (insert_query && insert_query->select)
         {
             /// Prepare Input storage before executing interpreter if we already got a buffer with data.
@@ -1093,6 +1096,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         span = std::make_unique<OpenTelemetry::SpanHolder>(class_name + "::execute()");
                     }
 
+                    // 一般调用的都在以 InterpreterxxxQuery.cpp 下面的 execute, 构造 query pipeline
                     res = interpreter->execute();
 
                     /// If it is a non-internal SELECT query, and active (write) use of the query cache is enabled, then add a processor on
@@ -1348,6 +1352,7 @@ void executeQuery(
 
     try
     {
+        // 主要逻辑流程 
         std::tie(ast, streams) = executeQueryImpl(begin, end, context, false, QueryProcessingStage::Complete, &istr);
     }
     catch (...)

@@ -374,6 +374,7 @@ BlockIO InterpreterSelectWithUnionQuery::execute()
     BlockIO res;
 
     QueryPlan query_plan;
+    // 构建查询计划
     buildQueryPlan(query_plan);
 
     auto builder = query_plan.buildQueryPipeline(

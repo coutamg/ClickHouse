@@ -501,7 +501,7 @@ void TCPHandler::runImpl()
                 return res;
             });
 
-            /// Processing Query
+            /// Processing Query, 解释/解析 SQL、构建 Pipeline
             std::tie(state.parsed_query, state.io) = executeQuery(state.query, query_context, false, state.stage);
 
             after_check_cancelled.restart();
@@ -515,6 +515,7 @@ void TCPHandler::runImpl()
                     state.io.onFinish();
             };
 
+            // 处理 Insert Query
             if (state.io.pipeline.pushing())
             {
                 /// FIXME: check explicitly that insert query suggests to receive data via native protocol,
@@ -522,6 +523,7 @@ void TCPHandler::runImpl()
                 processInsertQuery();
                 finish_or_cancel();
             }
+            // 处理 Ordinary Query
             else if (state.io.pipeline.pulling())
             {
                 processOrdinaryQueryWithProcessors();

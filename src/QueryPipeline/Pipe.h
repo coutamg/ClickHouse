@@ -119,6 +119,8 @@ public:
 private:
     /// Header is common for all output below.
     Block header;
+    // 这里面保存了所有算子的 transform, 其实也就是 pg 内所有执行算子加上 expression, fillter
+    // 的 node, 执行应该是靠这个来驱动
     std::shared_ptr<Processors> processors;
 
     /// If the variable is true, then each time a processor is added pipe will try

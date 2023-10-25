@@ -158,6 +158,7 @@ QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
     const BuildQueryPipelineSettings & build_pipeline_settings)
 {
     checkInitialized();
+    // 优化查询计划
     optimize(optimization_settings);
 
     struct Frame
@@ -173,20 +174,29 @@ QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
     std::stack<Frame> stack;
     stack.push(Frame{.node = root});
 
+    // DFS 构建 Pipeline
+    // 根据 QueryPlan 从 root 开始 DFS，当某个 node 的所有 children 都构建了 Pipeline 那
+    // 么与当前 node 构建新的 pipeline，最终返回 last_pipeline.
     while (!stack.empty())
     {
         auto & frame = stack.top();
 
         if (last_pipeline)
-        {
+        {   // 这里是上层节点
             frame.pipelines.emplace_back(std::move(last_pipeline));
             last_pipeline = nullptr;
         }
 
         size_t next_child = frame.pipelines.size();
+        // 第一次调用到这里的时候一般会是 scan node，也就是从 table 扫数据的 node
         if (next_child == frame.node->children.size())
         {
             bool limit_max_threads = frame.pipelines.empty();
+            // 构造 pipieline
+            // 对于 select 来说, 调用 ISourceStep::updatePipeline (第一个算子：从存储层拉取数据的算子)
+            // 后续处理的算子 ITransformingStep::updatePipeline (对拉取的数据进行处理的算子)
+            // 如果有两个 child，则走 JoinStep::updatePipeline 将 right pipeline 保存在由 left pipeline 的 step 中，
+            //  返回 left pipeline 
             last_pipeline = frame.node->step->updatePipeline(std::move(frame.pipelines), build_pipeline_settings);
 
             if (limit_max_threads && max_threads)
@@ -194,7 +204,7 @@ QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
 
             stack.pop();
         }
-        else
+        else // 这里就是 DFS 向下递归的过程，一直到最底层
             stack.push(Frame{.node = frame.node->children[next_child]});
 
         if (has_partial_result_setting && last_pipeline && !last_pipeline->isPartialResultActive())

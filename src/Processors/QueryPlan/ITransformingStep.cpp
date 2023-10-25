@@ -32,9 +32,10 @@ DataStream ITransformingStep::createOutputStream(
     return output_stream;
 }
 
-
+// 对拉取的数据进行处理的算子，这里的 pipelines 是下层 node(child node) 的输出
 QueryPipelineBuilderPtr ITransformingStep::updatePipeline(QueryPipelineBuilders pipelines, const BuildQueryPipelineSettings & settings)
 {
+    // 创建算子对应的 Transformer，添加 Transformer 到 Pipeline. 例如创建 agg 算子对数据处理的 Transformer
     if (collect_processors)
     {
         QueryPipelineProcessorsCollector collector(*pipelines.front(), this);

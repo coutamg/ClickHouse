@@ -259,6 +259,7 @@ ASTPtr tryParseQuery(
 
     Expected expected;
     ASTPtr res;
+    // IParserBase::parse() 递归处理
     const bool parse_res = parser.parse(token_iterator, res, expected);
     const auto last_token = token_iterator.max();
     _out_query_end = last_token.end;
