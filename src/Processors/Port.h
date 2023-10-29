@@ -33,11 +33,27 @@ public:
     {
         using UpdateList = std::vector<void *>;
 
+        // UpdateInfo 的 update_list 其实是和 Node 中的 post_updated_output_ports
+        // 或者 post_updated_input_ports 绑定的(参考 ExecutingGraph::addEdges 函数)
         UpdateList * update_list = nullptr;
+        // 对应的 id 其实就是相邻两个 node 之间的 Edge, 参考 ExecutingGraph::addEdges
+        // 函数
         void * id = nullptr;
         UInt64 version = 0;
         UInt64 prev_version = 0;
 
+        // 这样一旦某个 node 调用 ExecutingGraph::updateNode 函数，就会根据 node 
+        // 中对应的 processor.prepare 来通过 InputPort/OutputPort 来确定状态。同时
+        // processor.prepare 也会根据当前 Node 状态，结合 Port 的数据状态来确定
+        // InputPort/OutputPort 所代表的 Node 是否需要转换状态，如果需要转换状态，会
+        // 将相邻 id(Edge) 加入当前 Node 的 post_updated_output_ports 或者
+        // post_updated_input_ports 中.
+        // 可以参考其中的(IOutputFormat::prepare), 该函数会根据 has_input 的情况通过
+        // input.setNeeded()->update 来将当前 node 对应的 Edge 加入到
+        // post_updated_output_ports/post_updated_input_ports 中，这样在
+        // ExecutingGraph::updateNode 处理相邻 Edge(处理 updated_edges 时)，将
+        // Edge 涉及到的相邻的其它 Node push 到 updated_processors 中，不断更新整条
+        // pipeline 中 node 的状态
         void inline ALWAYS_INLINE update()
         {
             if (version == prev_version && update_list)
@@ -267,9 +283,12 @@ protected:
 ///   * You can pull only if port hasData().
 class InputPort : public Port
 {
+    // 记录了 process InputPort 是从哪个 OutputPort 的 process 来的
+    // 也表记了 OutputPort 的 process 将会发送到哪个 process 的 InputPort
     friend void connect(OutputPort &, InputPort &, bool);
 
 private:
+    // 记录了当前的 InputPort 是从哪个 OutputPort 的 process 发送过来的数据
     OutputPort * output_port = nullptr;
 
     mutable bool is_finished = false;
@@ -388,11 +407,15 @@ public:
 ///   * If port isFinished(), you can do nothing with it.
 ///   * If port not isNeeded(), you can only finish() it.
 ///   * You can push only if port doesn't hasData().
+// 
 class OutputPort : public Port
 {
+    // 记录了 process InputPort 是从哪个 OutputPort 的 process 来的
+    // 也表记了 OutputPort 的 process 将会发送到哪个 process 的 InputPort
     friend void connect(OutputPort &, InputPort &, bool);
 
 private:
+    // 记录了当前的 OutputPort 是从哪个 InputPort 的 process 发送过来的数据
     InputPort * input_port = nullptr;
 
 public:

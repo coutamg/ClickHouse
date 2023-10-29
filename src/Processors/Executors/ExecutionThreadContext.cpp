@@ -44,11 +44,14 @@ static void executeJob(ExecutingGraph::Node * node, ReadProgressCallback * read_
 {
     try
     {
+       // 调用 processor 重写的 work 方法
         node->processor->work();
 
         /// Update read progress only for source nodes.
         bool is_source = node->back_edges.empty();
 
+        // 在执行算子之后，会判断是否是 Source 算子，如果是数据源算子则会调用
+        // progress_callback 回复进度信息
         if (is_source && read_progress_callback)
         {
             if (auto read_progress = node->processor->getReadProgress())
@@ -92,6 +95,7 @@ bool ExecutionThreadContext::executeTask()
 
     try
     {
+        // 开始执行 processor 的任务
         executeJob(node, read_progress_callback);
         ++node->num_executed_jobs;
     }

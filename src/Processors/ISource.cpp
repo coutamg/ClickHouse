@@ -19,6 +19,7 @@ ISource::ISource(Block header, bool enable_auto_progress)
 {
 }
 
+// ISource没有InputPort，所以它不需要向 state 拉取数据（它自己会从存储层读取数据）
 ISource::Status ISource::prepare()
 {
     if (finished)
@@ -34,6 +35,7 @@ ISource::Status ISource::prepare()
     if (!output.canPush())
         return Status::PortFull;
 
+    // ISource 没有 input，所以会直接返回 Ready.
     if (!has_input)
         return Status::Ready;
 

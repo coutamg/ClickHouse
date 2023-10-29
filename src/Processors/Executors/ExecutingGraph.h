@@ -13,6 +13,42 @@ namespace DB
 {
 
 /// Graph of executing pipeline.
+/*
+图的构建如下所示
+┌───────────────────────┐              ┌───────────┐              ┌───────────┐
+│                       │ direct edges │           │              │           │
+│                       ├─────────────►│   Node 1  ├─────────────►│    Node i │
+│                       │              │           │              │           │
+│                       │              └───────────┘              └───────────┘
+│    Node 1             │
+│                       │              ┌───────────┐              ┌───────────┐
+│                       │ back edges   │           │              │           │
+│                       ├─────────────►│  Node 3   ├─────────────►│  Node k   │
+│                       │              │           │              │           │
+├───────────────────────┤              └───────────┘              └───────────┘
+│                       │
+│                       │               ┌───────────┐
+│                       │ direct edges  │           │
+│                       ├──────────────►│    Node j │
+│                       │               │           │
+│    Node 2             │               └───────────┘
+│                       │
+│                       │              ┌───────────┐
+│                       │ back edges   │           │
+│                       ├─────────────►│  Node m   │
+│                       │              │           │
+├───────────────────────┤              └───────────┘
+│                       │
+│                       │
+│                       │
+│                       │
+│     Node 3            │
+│                       │
+│                       │
+│                       │
+│                       │
+└───────────────────────┘
+*/
 class ExecutingGraph
 {
 public:
@@ -40,6 +76,9 @@ public:
 
         /// Edge version is increased when port's state is changed (e.g. when data is pushed). See Port.h for details.
         /// To compare version with prev_version we can decide if neighbour processor need to be prepared.
+        // update_info 的 update_list 会和 Node.post_updated_input_ports 绑定(参考
+        // addEdges 函数)
+        // 一旦
         Port::UpdateInfo update_info;
     };
 
@@ -73,6 +112,7 @@ public:
     };
 
     /// Graph node. Represents single Processor.
+    // 一个 node 一个 processor 也就是一个 算子
     struct Node
     {
         /// Processor and it's position in graph.
@@ -80,10 +120,11 @@ public:
         uint64_t processors_id = 0;
 
         /// Direct edges are for output ports, back edges are for input ports.
-        Edges direct_edges;
-        Edges back_edges;
+        Edges direct_edges; // 输出数据，记录向哪些 node 输出当前数据
+        Edges back_edges; // 输入数据，记录哪些 node 向当前 node 输入数据
 
         /// Current status. It is accessed concurrently, using mutex.
+        // 当前 node 的一个执行状态
         ExecStatus status = ExecStatus::Idle;
         std::mutex status_mutex;
 
@@ -96,6 +137,7 @@ public:
         /// Ports which have changed their state since last processor->prepare() call.
         /// They changed when neighbour processors interact with connected ports.
         /// They will be used as arguments for next processor->prepare() (and will be cleaned after that).
+        // 当前 node 附近的 process 的 port 状态发生了改变，那么当前 node 需要开始干活
         IProcessor::PortNumbers updated_input_ports;
         IProcessor::PortNumbers updated_output_ports;
 

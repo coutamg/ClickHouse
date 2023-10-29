@@ -36,12 +36,17 @@ IOutputFormat::Status IOutputFormat::prepareMainAndPartialResult()
             continue;
         }
 
+        // 更新相邻的 Edge，分别放入 
+        // post_updated_input_ports、post_updated_output_ports
         input.setNeeded();
         need_data = true;
 
+        // 查看 state 是否有数据,如果没有则返回 NeedData.
         if (!input.hasData())
             continue;
 
+        // 如果 state 已经有数据,那么调用 pullData() 方法
+        // 将数据拉取到 current_chunk 中,并将 has_input 设为 true.
         setCurrentChunk(input, kind);
         return Status::Ready;
     }
@@ -77,6 +82,7 @@ IOutputFormat::Status IOutputFormat::prepare()
     if (has_input)
         return Status::Ready;
 
+    // 默认就是 Main kind, PartialResult/Totals/Extremes 暂时不用管.
     auto status = prepareMainAndPartialResult();
     if (status != Status::Finished)
         return status;

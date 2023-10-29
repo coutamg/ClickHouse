@@ -79,9 +79,11 @@ static void threadFunction(
 
     try
     {
+        // 将当前线程附加到线程池
         if (thread_group)
             CurrentThread::attachToGroup(thread_group);
 
+        // 开始执行
         data.executor->execute(num_threads, concurrency_control);
     }
     catch (...)
@@ -108,6 +110,7 @@ bool PullingAsyncPipelineExecutor::pull(Chunk & chunk, uint64_t milliseconds)
         data->executor->setReadProgressCallback(pipeline.getReadProgressCallback());
         data->lazy_format = lazy_format.get();
 
+        // threadFuncation 异步执行 Pipeline 拉数据
         auto func = [&, thread_group = CurrentThread::getGroup()]()
         {
             threadFunction(*data, thread_group, pipeline.getNumThreads(), pipeline.getConcurrencyControl());
