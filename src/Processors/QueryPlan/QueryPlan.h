@@ -104,7 +104,7 @@ public:
     /// Tree node. Step and it's children.
     struct Node
     {
-        QueryPlanStepPtr step;
+        QueryPlanStepPtr step; // 这里是告诉
         std::vector<Node *> children = {};
     };
 
@@ -115,7 +115,7 @@ public:
 
 private:
     QueryPlanResourceHolder resources;
-    Nodes nodes;
+    Nodes nodes; // 这里保存的是某个 sql 的逻辑的 plan tree，ck 里面用 step 来表示
     Node * root = nullptr;
 
     void checkInitialized() const;

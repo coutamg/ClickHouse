@@ -47,10 +47,55 @@ class SortDescription;
 /// split or merge parts of graph, calculate expressions on partial input.
 ///
 /// Built DAG is used by ExpressionActions, which calculates expressions on block.
+/*
+ * 在ClickHouse中，ActionsDAG（有时也称为ActionDAG）是用于执行和管理查询计划的关键组件。它是一个
+ * 有向无环图（DAG），其中每个节点表示一个操作（Action），边表示操作之间的依赖关系。
+ *
+ * ActionsDAG的主要功能是以高度并行的方式执行查询计划中的各个操作，并确保操作的顺序满足其依赖关
+ * 系。通过使用ActionsDAG，ClickHouse能够有效地处理复杂的查询计划，并实现高性能的数据处理和查询
+ * 执行。
+ *
+ * ActionsDAG的工作原理如下：
+ *
+ * 构建：在查询规划（Query Planning）阶段，ClickHouse解析和优化查询语句，生成一个执行计划
+ * 树（Execution Plan Tree）。然后，通过遍历这棵树，将每个操作（例如扫描表、过滤、聚合等）转
+ * 换为一个节点，并建立节点之间的依赖关系，形成ActionsDAG。
+ *
+ * 依赖分析：ActionsDAG会分析操作之间的依赖关系，并确定操作的执行顺序。节点之间的依赖关系可以通
+ * 过多种方式表示，例如直接连接边、拓扑排序等。
+ *
+ * 并行执行：ActionsDAG允许并行执行具有独立依赖的操作。每个操作节点都有一个执行线程或任务，根据
+ * 依赖关系进行调度和执行。ActionsDAG确保在满足依赖关系的前提下，尽可能地并行执行操作，以提高
+ * 查询性能。
+ *
+ * 数据传递和交换：ActionsDAG中的操作可以生成中间结果，并通过边在节点之间传递数据。在执行过程
+ * 中，操作节点会从其依赖节点接收输入数据，并将输出数据传递给依赖它的后续节点。这涉及到数据交
+ * 换、缓冲区管理和流水线处理等技术，以确保数据的高效传输和处理。
+ *
+ * 通过以上步骤，ActionsDAG能够有效地执行和管理复杂的查询计划，提供高性能的数据处理和查询执行
+ * 能力。它利用并行执行和数据传递来最大限度地提高查询的执行速度，并支持了ClickHouse强大的查询
+ * 引擎功能。
+ * 
+ * 参考: https://zhuanlan.zhihu.com/p/605743800
+ */
 class ActionsDAG
 {
 public:
 
+    /*
+     * ActionsDAG 是一个由表达式构成的有向无环图，其中的节点有下面几种类型： 
+     * INPUT：输入列
+     * COLUMN：常量列
+     * ALIAS：列的别名
+     * ARRAY_JOIN：arrayJoin 函数
+     * FUNCTION：其他普通函数
+     * 
+     * ActionsDAG 的边表示的是节点表达式之间的依赖推导关系。基于 DAG，方便对 Action 进行优化
+     * ，例如： - 删除不需要的表达式 - 字表达式编译 - 节点拆分或合并
+     * 
+     * ActionsDAG 在执行时，会首先进行拓扑排序，得到表达式执行的序列，然后该表达式序列作用
+     * 到 Block 上，实现按列进行计算
+     */
     enum class ActionType
     {
         /// Column which must be in input.

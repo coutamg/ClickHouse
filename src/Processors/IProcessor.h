@@ -113,12 +113,15 @@ using Processors = std::vector<ProcessorPtr>;
   * For example, data streams are considered equal up to order unless ordering properties are stated explicitly.
   * Another example: we should support the notion of "arbitrary N-th of M substream" of full stream of data.
   */
-
+// 参考 https://zhuanlan.zhihu.com/p/614907875
+// processor 就是在 pipeline 中做计算的
 class IProcessor
 {
 protected:
-    InputPorts inputs;
-    OutputPorts outputs;
+    // 每个 processor 都可以有一个或者多个 input ，可以有一个或者多个输出，也就是 pipeline 的
+    // 变换是非常灵活的，可以 1 -> 1, N -> 1, 1 -> N
+    InputPorts inputs; // 当前 process 的输入数据
+    OutputPorts outputs; // 当前 process 的输出数据
 
 public:
     IProcessor() = default;

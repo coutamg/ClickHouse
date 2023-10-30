@@ -26,6 +26,8 @@ namespace DB
  */
 struct SelectQueryOptions
 {
+    // 将QueryProcessingStage::Enum枚举值转换为对应的字符串。这个函数通常用于生成表示查询
+    // 阶段的字符串，以便在日志、性能分析或其他输出中使用
     QueryProcessingStage::Enum to_stage;
     size_t subquery_depth;
     bool only_analyze = false;

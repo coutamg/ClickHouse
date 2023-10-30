@@ -216,7 +216,7 @@ private:
     std::unique_ptr<SelectQueryExpressionAnalyzer> query_analyzer;
     SelectQueryInfo query_info;
 
-    /// Is calculated in getSampleBlock. Is used later in readImpl.
+    /// Is calculated in getSampleBlock. Is used later in readImpl. expressions
     ExpressionAnalysisResult analysis_result;
     /// For row-level security.
     RowPolicyFilterPtr row_policy_filter;
@@ -238,6 +238,7 @@ private:
     /// Actions to calculate ALIAS if required.
     ActionsDAGPtr alias_actions;
 
+  // 下面应该表面了当前 select 的数据源从那里来
     /// The subquery interpreter, if the subquery
     std::unique_ptr<InterpreterSelectWithUnionQuery> interpreter_subquery;
 

@@ -39,7 +39,9 @@ QueryPipelineBuilderPtr ITransformingStep::updatePipeline(QueryPipelineBuilders 
     if (collect_processors)
     {
         QueryPipelineProcessorsCollector collector(*pipelines.front(), this);
+        // 1.虚方法，将当前算子对应的 transformer 添加到 pipeline.
         transformPipeline(*pipelines.front(), settings);
+        // 2.收集 processor.
         processors = collector.detachProcessors();
     }
     else

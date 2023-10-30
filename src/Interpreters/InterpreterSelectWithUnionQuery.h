@@ -51,6 +51,7 @@ public:
     void extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr & ast, ContextPtr context) const override;
 
 private:
+    // 这里应该保存的是 union 了多少个 select query
     std::vector<std::unique_ptr<IInterpreterUnionOrSelectQuery>> nested_interpreters;
 
     static Block getCommonHeaderForUnion(const Blocks & headers);

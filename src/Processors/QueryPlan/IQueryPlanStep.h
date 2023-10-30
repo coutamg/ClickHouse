@@ -136,14 +136,16 @@ public:
 protected:
     virtual void updateOutputStream() { throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented"); }
 
-    DataStreams input_streams;
-    std::optional<DataStream> output_stream;
+    DataStreams input_streams; // 当前 step 的输入的数据
+    std::optional<DataStream> output_stream; // 当前 step 处理后输出的数据？？？
 
     /// Text description about what current step does.
     std::string step_description;
 
     /// This field is used to store added processors from this step.
     /// It is used only for introspection (EXPLAIN PIPELINE).
+    // 每个 IXxxStep 中也保存了一份 processors，这个 processors 收集了每个算子
+    // updatepipeline 时得到的 Processor
     Processors processors;
 
     static void describePipeline(const Processors & processors, FormatSettings & settings);

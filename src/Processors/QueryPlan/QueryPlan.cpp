@@ -102,6 +102,7 @@ void QueryPlan::unitePlans(QueryPlanStepPtr step, std::vector<std::unique_ptr<Qu
     }
 }
 
+// 一个 query 分成多个 step 来执行，这里其实是构造逻辑的 plan tree
 void QueryPlan::addStep(QueryPlanStepPtr step)
 {
     checkNotCompleted();
@@ -193,10 +194,17 @@ QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
         {
             bool limit_max_threads = frame.pipelines.empty();
             // 构造 pipieline
-            // 对于 select 来说, 调用 ISourceStep::updatePipeline (第一个算子：从存储层拉取数据的算子)
+            // 对于 select 来说, 调用 ISourceStep::updatePipeline (第一个算子：从存储
+            //     层拉取数据的算子)
             // 后续处理的算子 ITransformingStep::updatePipeline (对拉取的数据进行处理的算子)
-            // 如果有两个 child，则走 JoinStep::updatePipeline 将 right pipeline 保存在由 left pipeline 的 step 中，
-            //  返回 left pipeline 
+            // 如果有两个 child，则走 JoinStep::updatePipeline 将 right pipeline 保存在由
+            //     left pipeline 的 step 中，
+            //  返回 left pipeline
+            // 每个 updatePipeline 的调用可以参考具体 sql 的 executeImpl 怎么构造 step 的。
+            // 例如 select 语句可以参考 InterpreterSelectQuery.cpp::executeImpl 怎么构造
+            // 的 step
+            // 例如对于 Select * From customer Limit 1，updatePipeline的顺序是：
+            //   ReadFromMergeTree(ISourceStep) -> Limit(ITransformingStep) -> Expression(ITransformingStep）
             last_pipeline = frame.node->step->updatePipeline(std::move(frame.pipelines), build_pipeline_settings);
 
             if (limit_max_threads && max_threads)

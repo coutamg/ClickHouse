@@ -45,6 +45,7 @@ private:
     };
 
 public:
+    // 类似 dynamic_cast 如果类型匹配，则返回 Derived 指针，否则返回 nullptr
     template <class Derived>
     auto as() -> std::invoke_result_t<decltype(&CastHelper<Derived, false>::value), CastHelper<Derived, false>, Base *>
     {

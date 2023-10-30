@@ -341,6 +341,8 @@ public:
     /// !aggregation_keys_list.empty() can be used.
     bool useGroupingSetKey() const { return !aggregation_keys_list.empty(); }
 
+    // 获取当前 query 的 group by 列的 name，例如:  select a, sum(b) from t1 group by (a);
+    // 则 aggregation_keys 保存的就是 a 这个列
     const NamesAndTypesList & aggregationKeys() const { return aggregation_keys; }
     bool hasConstAggregationKeys() const { return has_const_aggregation_keys; }
     const NamesAndTypesLists & aggregationKeysList() const { return aggregation_keys_list; }

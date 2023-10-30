@@ -1386,7 +1386,7 @@ static bool hasWithTotalsInAnySubqueryInFromClause(const ASTSelectQuery & query)
     return false;
 }
 
-
+// 这里其实就是构造逻辑 plan, 其实也是 step, 这里的 plan 的生成是从底部到顶部生成
 void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<Pipe> prepared_pipe)
 {
     ProfileEvents::increment(ProfileEvents::SelectQueriesWithSubqueries);
@@ -1484,6 +1484,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
     }
     else
     {
+        // 从外部输入的源，不是 table 和 subquery 来的
         if (prepared_pipe)
         {
             auto prepared_source_step = std::make_unique<ReadFromPreparedSource>(std::move(*prepared_pipe));
@@ -1504,6 +1505,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
             to_aggregation_stage = true;
 
         /// Read the data from Storage. from_stage - to what stage the request was completed in Storage.
+        // 如果有 storage, 则调用 storage->read(IStorage::read), 构造 ReadFromStorageStep
         executeFetchColumns(from_stage, query_plan);
 
         LOG_TRACE(log, "{} -> {}", QueryProcessingStage::toString(from_stage), QueryProcessingStage::toString(options.to_stage));
@@ -2977,6 +2979,7 @@ void InterpreterSelectQuery::executeOrder(QueryPlan & query_plan, InputOrderInfo
 
     /// Merge the sorted blocks.
     auto sorting_step = std::make_unique<SortingStep>(
+        // 把当前 step(node) 的输出作为，sort step(sort node)输入
         query_plan.getCurrentDataStream(),
         output_order_descr,
         limit,

@@ -300,6 +300,7 @@ void InterpreterSelectWithUnionQuery::buildQueryPlan(QueryPlan & query_plan)
     /// Skip union for single interpreter.
     if (num_plans == 1)
     {
+        // 只有一个 sql 时，直接走 InterpreterSelectQuery.cpp::buildQueryPlan
         nested_interpreters.front()->buildQueryPlan(query_plan);
     }
     else

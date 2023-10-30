@@ -12,6 +12,7 @@ ISourceStep::ISourceStep(DataStream output_stream_)
 // 从存储层拉取数据的算子
 QueryPipelineBuilderPtr ISourceStep::updatePipeline(QueryPipelineBuilders, const BuildQueryPipelineSettings & settings)
 {
+    // 1.实例化一个 QueryPipelineBuilder，用于构键后续的 Pipeline.
     auto pipeline = std::make_unique<QueryPipelineBuilder>();
 
     /// For `Source` step, since it's not add new Processors to `pipeline->pipe`
@@ -19,6 +20,7 @@ QueryPipelineBuilderPtr ISourceStep::updatePipeline(QueryPipelineBuilders, const
     /// And Processors for the Step is added here. So we do not need to use
     /// `QueryPipelineProcessorsCollector` to collect Processors.
     // 初始化 Pipeline
+    // 2.虚方法，调用对应算子的初始化 pipeline
     initializePipeline(*pipeline, settings);
 
     /// But we need to set QueryPlanStep manually for the Processors, which
