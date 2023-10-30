@@ -185,6 +185,7 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
     const auto src_header = pipeline.getHeader();
     auto transform_params = std::make_shared<AggregatingTransformParams>(src_header, std::move(params), final);
 
+    // grouping sets
     if (!grouping_sets_params.empty())
     {
         const size_t grouping_sets_size = grouping_sets_params.size();
@@ -355,6 +356,7 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
         return;
     }
 
+    // group by sort
     if (!sort_description_for_merging.empty())
     {
         /// We don't rely here on input_stream.sort_description because it is not correctly propagated for now in all cases
@@ -473,6 +475,9 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
                     skip_merging);
             });
 
+        // We add the explicit resize here, but not in case of aggregating in order,
+        // since AIO don't use two-level hash tables and thus returns only buckets
+        // with bucket_number = -1.
         pipeline.resize(should_produce_results_in_order_of_bucket_number ? 1 : params.max_threads, true /* force */);
 
         aggregating = collector.detachProcessors(0);

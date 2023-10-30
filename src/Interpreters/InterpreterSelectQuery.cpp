@@ -1746,9 +1746,11 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                 }
             }
 
+            // where 操作
             if (!query_info.projection && expressions.hasWhere())
                 executeWhere(query_plan, expressions.before_where, expressions.remove_where_filter);
 
+            // 聚合操作本身作为一个 query_plan_step，排在 where 操作之后
             if (expressions.need_aggregate)
                 executeAggregation(
                     query_plan, expressions.before_aggregation, aggregate_overflow_row, aggregate_final, query_info.input_order_info);
@@ -2723,6 +2725,7 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
     else
         group_by_info = nullptr;
 
+    // GROUP BY Optimization Depending on Table Sorting Key 这个优化
     if (!group_by_info && settings.force_aggregation_in_order)
     {
         group_by_sort_description = getSortDescriptionFromGroupBy(getSelectQuery());
@@ -2730,12 +2733,14 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
     }
 
     auto merge_threads = max_streams;
+    // aggregation_memory_efficient_merge_threads 这个配置项和分布式查询相关，用来降低内存使用的
     auto temporary_data_merge_threads = settings.aggregation_memory_efficient_merge_threads
         ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
         : static_cast<size_t>(settings.max_threads);
 
     bool storage_has_evenly_distributed_read = storage && storage->hasEvenlyDistributedRead();
 
+    // 分布式查询相关
     const bool should_produce_results_in_order_of_bucket_number = options.to_stage == QueryProcessingStage::WithMergeableState
         && (settings.distributed_aggregation_memory_efficient || settings.enable_memory_bound_merging_of_aggregation_results);
 

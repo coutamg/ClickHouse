@@ -42,6 +42,8 @@ struct AggregatingTransformParams
     /// we can have two different aggregators at the same time due to mixed pipeline of aggregate
     /// projections, and one of them might gets destroyed before used.
     AggregatorListPtr aggregator_list_ptr;
+    // aggregator这个对象是真正封装了具体的聚合函数、参数、预聚合操作、合并操作的对象，并提供
+    // 了将聚合结果转换为Blocks的接口
     Aggregator & aggregator;
     bool final;
 

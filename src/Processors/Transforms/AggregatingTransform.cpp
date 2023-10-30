@@ -607,6 +607,7 @@ IProcessor::Status AggregatingTransform::prepare()
     if (is_consume_finished)
         input.setNeeded();
 
+    // current_chunk 保存了来自下游的数据
     current_chunk = input.pull(/*set_not_needed = */ !is_consume_finished);
     read_current_chunk = true;
 
@@ -620,10 +621,14 @@ IProcessor::Status AggregatingTransform::prepare()
     return Status::Ready;
 }
 
+// 虽然AggregatingTransform有合并阶段，但真正的合并操作不在这个节点上执行，而是由其扩展
+// 的节点执行，这个阶段它只负责传递数据
+// 只有最后一个完成第一阶段的AggregatingTransform才会扩展pipeline
 void AggregatingTransform::work()
 {
     if (is_consume_finished)
     {
+        // 扩展pipeline
         initGenerate();
     }
     else
