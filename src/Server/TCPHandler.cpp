@@ -871,13 +871,15 @@ void TCPHandler::processInsertQuery()
         /// Made above the rest of the lines,
         /// so that in case of `start` function throws an exception,
         /// client receive exception before sending data.
+        // 构造 pipeline 的 DAG 执行图
         executor.start();
 
         if (processed_data)
             executor.push(std::move(processed_data));
         else
-            startInsertQuery();
+            startInsertQuery(); // 向客户端发送表的 Description
 
+        // 从客户端接受数据开始不断的把数据写入下去
         while (readDataNext())
             executor.push(std::move(state.block_for_insert));
 

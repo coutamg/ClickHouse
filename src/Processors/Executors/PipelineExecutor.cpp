@@ -32,7 +32,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-
+// 调用 PipelineExecutor 构造方法，将 Pipeline 中的 Processor 串联成 DAG
 PipelineExecutor::PipelineExecutor(std::shared_ptr<Processors> & processors, QueryStatusPtr elem, UInt64 partial_result_duration_ms_)
     : process_list_element(std::move(elem))
     , partial_result_duration_ms(partial_result_duration_ms_)
@@ -44,6 +44,7 @@ PipelineExecutor::PipelineExecutor(std::shared_ptr<Processors> & processors, Que
     }
     try
     {
+        // 构造 DAG 图来生成数据的流向图
         graph = std::make_unique<ExecutingGraph>(processors, profile_processors);
     }
     catch (Exception & exception)
@@ -133,6 +134,7 @@ void PipelineExecutor::execute(size_t num_threads, bool concurrency_control)
 
 bool PipelineExecutor::executeStep(std::atomic_bool * yield_flag)
 {
+    // 第一次执行的时候未初始化，这个时候开始进行相应的初始化
     if (!is_execution_initialized)
     {
         initializeExecution(1, true);
@@ -145,6 +147,7 @@ bool PipelineExecutor::executeStep(std::atomic_bool * yield_flag)
             return true;
     }
 
+    // 完成 DAG 节点任务的调度执行
     executeStepImpl(0, yield_flag);
 
     if (!tasks.isFinished())
@@ -234,6 +237,7 @@ void PipelineExecutor::finalizeExecution()
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Pipeline stuck. Current state:\n{}", dumpPipeline());
 }
 
+// 单线程执行
 void PipelineExecutor::executeSingleThread(size_t thread_num)
 {
     executeStepImpl(thread_num);
@@ -263,13 +267,14 @@ void PipelineExecutor::executeStepImpl(size_t thread_num, std::atomic_bool * yie
         /// First, find any processor to execute.
         /// Just traverse graph and prepare any processor.
         while (!tasks.isFinished() && !context.hasTask())
-            tasks.tryGetTask(context);
+            tasks.tryGetTask(context); // 1.尝试为当前线程获取 task,并放入 context.
 
         while (context.hasTask() && !yield)
         {
             if (tasks.isFinished())
                 break;
 
+            // 2.线程执行 task.
             if (!context.executeTask())
                 cancel();
 
@@ -289,10 +294,12 @@ void PipelineExecutor::executeStepImpl(size_t thread_num, std::atomic_bool * yie
                 Queue async_queue;
 
                 /// Prepare processor after execution.
+                // 3.更新已经执行节点相邻的节点状态.
                 if (!graph->updateNode(context.getProcessorID(), queue, async_queue))
                     cancel();
 
                 /// Push other tasks to global queue.
+                // 4.将新准备好的 task 放入全局队列.
                 tasks.pushTasks(queue, async_queue, context);
             }
 
@@ -327,15 +334,18 @@ void PipelineExecutor::initializeExecution(size_t num_threads, bool concurrency_
     use_threads = slots->grantedCount();
 
     Queue queue;
+    // 初始化 DAG 起始节点变为可执行状态，调用 ExecutingGraph::initializeExecution
     graph->initializeExecution(queue);
 
     tasks.init(num_threads, use_threads, profile_processors, trace_processors, read_progress_callback.get(), partial_result_duration_ms);
+    // 初始化的可执行节点放入 task_queue 中等待线程处理
     tasks.fill(queue);
 
     if (num_threads > 1)
         pool = std::make_unique<ThreadPool>(CurrentMetrics::QueryPipelineExecutorThreads, CurrentMetrics::QueryPipelineExecutorThreadsActive, num_threads);
 }
 
+// 多线程执行
 void PipelineExecutor::spawnThreads()
 {
     while (auto slot = slots->tryAcquire())

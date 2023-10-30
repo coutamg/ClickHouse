@@ -80,13 +80,15 @@ const Block & PushingPipelineExecutor::getHeader() const
     return pushing_source->getPort().getHeader();
 }
 
-
+// insert 的 pipeline 的执行入口
 void PushingPipelineExecutor::start()
 {
     if (started)
         return;
 
     started = true;
+    // 这里将之前创建的 processors 构造成一个 DAG 图(数据 + 链表表示), 用来表示执行的时候
+    // 数据 的流向
     executor = std::make_shared<PipelineExecutor>(pipeline.processors, pipeline.process_list_element, pipeline.partial_result_duration_ms);
     executor->setReadProgressCallback(pipeline.getReadProgressCallback());
 
@@ -102,6 +104,7 @@ void PushingPipelineExecutor::push(Chunk chunk)
 
     pushing_source->setData(std::move(chunk));
 
+    // 开始执行 insert
     if (!executor->executeStep(&input_wait_flag))
         throw Exception(ErrorCodes::LOGICAL_ERROR,
                         "Pipeline for PushingPipelineExecutor was finished before all data was inserted");

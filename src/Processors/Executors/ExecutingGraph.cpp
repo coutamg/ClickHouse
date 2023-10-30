@@ -25,6 +25,7 @@ ExecutingGraph::ExecutingGraph(std::shared_ptr<Processors> processors_, bool pro
         processors_map[proc] = node;
         nodes.emplace_back(std::make_unique<Node>(proc, node));
 
+        // source 的 input 是空的，因为 source 是需要从表里面 scan 数据
         bool is_source = proc->getInputs().empty();
         source_processors.emplace_back(is_source);
     }
@@ -51,13 +52,14 @@ ExecutingGraph::Edge & ExecutingGraph::addEdge(Edges & edges, Edge edge, const I
     return added_edge;
 }
 
+// 将当前新的 node 加入到 有向图里面
 bool ExecutingGraph::addEdges(uint64_t node)
 {
     IProcessor * from = nodes[node]->processor;
 
     bool was_edge_added = false;
 
-    /// Add backward edges from input ports.
+    /// Add backward edges from input ports. 获取 input list
     auto & inputs = from->getInputs();
     auto from_input = nodes[node]->back_edges.size();
 
@@ -65,8 +67,10 @@ bool ExecutingGraph::addEdges(uint64_t node)
     {
         was_edge_added = true;
 
+        // 获取 from_input + 1 的 IProcessor
         for (auto it = std::next(inputs.begin(), from_input); it != inputs.end(); ++it, ++from_input)
         {
+            // 通过 InputPort 的 OutputPort(哪个 process 发送数据过来)，找到谁发的数据
             const IProcessor * to = &it->getOutputPort().getProcessor();
             auto output_port_number = to->getOutputPortNumber(&it->getOutputPort());
             Edge edge(0, true, from_input, output_port_number, &nodes[node]->post_updated_input_ports);
@@ -85,6 +89,7 @@ bool ExecutingGraph::addEdges(uint64_t node)
 
         for (auto it = std::next(outputs.begin(), from_output); it != outputs.end(); ++it, ++from_output)
         {
+           // 通过 OutputPort 的 InputPort(哪个 process 接收数据过来)，找到谁接收数据
             const IProcessor * to = &it->getInputPort().getProcessor();
             auto input_port_number = to->getInputPortNumber(&it->getInputPort());
             Edge edge(0, false, input_port_number, from_output, &nodes[node]->post_updated_output_ports);
@@ -189,6 +194,8 @@ void ExecutingGraph::initializeExecution(Queue & queue)
     uint64_t num_processors = nodes.size();
     for (uint64_t proc = 0; proc < num_processors; ++proc)
     {
+        // 将不存在 direct_edges 的 Node 放入栈中,
+        // 对于 plan tree 来说，最顶层的 node 是向用户发送数据的，所以没有 output 了
         if (nodes[proc]->direct_edges.empty())
         {
             stack.push(proc);
@@ -199,11 +206,12 @@ void ExecutingGraph::initializeExecution(Queue & queue)
 
     Queue async_queue;
 
+    // 从 plan tree 的顶向下开始 update node
     while (!stack.empty())
     {
         uint64_t proc = stack.top();
         stack.pop();
-
+        // 更新 Node 状态.
         updateNode(proc, queue, async_queue);
 
         if (!async_queue.empty())
@@ -212,7 +220,8 @@ void ExecutingGraph::initializeExecution(Queue & queue)
     }
 }
 
-
+// 根据每个 Node 的 updated_input_ports，updated_output_ports 状态来逐渐的更新相邻
+// Node 中 processor 的状态，使得 pipeline 不断运行下去
 bool ExecutingGraph::updateNode(uint64_t pid, Queue & queue, Queue & async_queue)
 {
     std::stack<Edge *> updated_edges;
@@ -225,6 +234,7 @@ bool ExecutingGraph::updateNode(uint64_t pid, Queue & queue, Queue & async_queue
     {
         std::optional<std::unique_lock<std::mutex>> stack_top_lock;
 
+        // 处理 updated_edges 中 edge 指向的 node.
         if (updated_processors.empty())
         {
             auto * edge = updated_edges.top();
@@ -256,6 +266,7 @@ bool ExecutingGraph::updateNode(uint64_t pid, Queue & queue, Queue & async_queue
             }
         }
 
+        // 处理 updated_processors 中 node,更新 node 状态.
         if (!updated_processors.empty())
         {
             pid = updated_processors.top();
@@ -279,6 +290,9 @@ bool ExecutingGraph::updateNode(uint64_t pid, Queue & queue, Queue & async_queue
                 {
                     auto & processor = *node.processor;
                     IProcessor::Status last_status = node.last_processor_status;
+                    // 对于第一次初始化来说，select 会从顶层 porcessor 开始，此时会返回
+                    // Status::NeedData(参考 IOutputFormat.cpp::prepare)
+                    // 一般来说最后会 plan tree 最终会调用到 ISource::prepare
                     IProcessor::Status status = processor.prepare(node.updated_input_ports, node.updated_output_ports);
                     node.last_processor_status = status;
 
@@ -318,8 +332,10 @@ bool ExecutingGraph::updateNode(uint64_t pid, Queue & queue, Queue & async_queue
                 node.updated_input_ports.clear();
                 node.updated_output_ports.clear();
 
+                // 通过 Inport 来确定当前 node 的 status
                 switch (node.last_processor_status)
                 {
+                    // NeedData 将 Node.status 从 Preparing -> Idle.
                     case IProcessor::Status::NeedData:
                     case IProcessor::Status::PortFull:
                     {
@@ -333,12 +349,17 @@ bool ExecutingGraph::updateNode(uint64_t pid, Queue & queue, Queue & async_queue
                     }
                     case IProcessor::Status::Ready:
                     {
+                        // 对于 ExecutingGraph::initializeExecution 来说，最后
+                        // 会调用到 ISource::prepare, 此时由于没有 InputPort，所以
+                        // 上面的 prepare 直接返回 Status::Ready, 走到这里，因此
+                        // updateNode 返回
                         node.status = ExecutingGraph::ExecStatus::Executing;
                         queue.push(&node);
                         break;
                     }
                     case IProcessor::Status::Async:
                     {
+                       // 第一次初始化时，node 的状态为 Executing
                         node.status = ExecutingGraph::ExecStatus::Executing;
                         async_queue.push(&node);
                         break;
@@ -350,6 +371,7 @@ bool ExecutingGraph::updateNode(uint64_t pid, Queue & queue, Queue & async_queue
                     }
                 }
 
+                // 将 Node 相邻的待更新 Edge 放入 update_edges 这个栈中.
                 if (!need_expand_pipeline)
                 {
                     /// If you wonder why edges are pushed in reverse order,
