@@ -667,6 +667,7 @@ void AggregatingTransform::consume(Chunk chunk)
 
     std::lock_guard lock(snapshot_mutex);
 
+    // 当前的 step 只用来做 merge
     if (params->params.only_merge)
     {
         auto block = getInputs().front().getHeader().cloneWithColumns(chunk.detachColumns());
@@ -676,11 +677,13 @@ void AggregatingTransform::consume(Chunk chunk)
     }
     else
     {
+        // 执行的入口函数
         if (!params->aggregator.executeOnBlock(chunk.detachColumns(), 0, num_rows, variants, key_columns, aggregate_columns, no_more_keys))
             is_consume_finished = true;
     }
 }
 
+// 扩展 pipeline
 void AggregatingTransform::initGenerate()
 {
     if (is_generate_initialized.load(std::memory_order_acquire))
@@ -720,13 +723,16 @@ void AggregatingTransform::initGenerate()
             params->aggregator.writeToTemporaryFile(variants);
     }
 
+    // many_data 在所有的AggregatingTransform节点中共享
     if (many_data->num_finished.fetch_add(1) + 1 < many_data->variants.size())
         return;
 
+    // 如果没有写到磁盘文件
     if (!params->aggregator.hasTemporaryData())
     {
         if (!skip_merging)
         {
+            // 这里只做 partial aggregate
             auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
             auto prepared_data_ptr = std::make_shared<ManyAggregatedDataVariants>(std::move(prepared_data));
             processors.emplace_back(
@@ -734,6 +740,7 @@ void AggregatingTransform::initGenerate()
         }
         else
         {
+            // 这里做 partial + final aggregate
             auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
             Pipes pipes;
             for (auto & variant : prepared_data)
@@ -798,6 +805,7 @@ void AggregatingTransform::initGenerate()
         {
             Pipes pipes;
 
+            // 每个磁盘文件扩展一个SourceFromNativeStream节点
             for (auto * tmp_stream : tmp_data.getStreams())
                 pipes.emplace_back(Pipe(std::make_unique<SourceFromNativeStream>(tmp_stream)));
 
@@ -814,6 +822,8 @@ void AggregatingTransform::initGenerate()
             ReadableSize(compressed_size),
             ReadableSize(uncompressed_size));
 
+        // 这里会添加 MergingAggregatedBucketTransform(只有一个) 或者
+        // MergingAggregatedBucketTransform(多个) + SortingAggregatedTransform
         addMergingAggregatedMemoryEfficientTransform(pipe, params, temporary_data_merge_threads);
 
         processors = Pipe::detachProcessors(std::move(pipe));

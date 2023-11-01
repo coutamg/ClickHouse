@@ -189,9 +189,10 @@ template <typename FieldType, typename TData,
         bool consecutive_keys_optimization = true, bool nullable = false>
 struct AggregationMethodOneNumber
 {
+    // 对于 UInt8 TData 是 FixedImplicitZeroHashMapWithCalculatedSize<UInt8, AggregateDataPtr>
     using Data = TData;
-    using Key = typename Data::key_type;
-    using Mapped = typename Data::mapped_type;
+    using Key = typename Data::key_type; // 为 UInt8
+    using Mapped = typename Data::mapped_type; // 为 AggregateDataPtr
 
     Data data;
 
@@ -567,6 +568,26 @@ class Aggregator;
 using ColumnsHashing::HashMethodContext;
 using ColumnsHashing::HashMethodContextPtr;
 
+/*
+ AggregatedDataVariants 是用于存储和处理聚合数据的数据结构。它是在分布式查询中使用的一种抽象
+ 类型，用于表示经过聚合操作后生成的数据。
+ AggregatedDataVariants 包含了多种不同的存储格式，以适应不同类型的聚合操作和数据存储需求。它
+ 可以包括以下几种变体：
+  1. OrdinaryAggregatedData: 这是最常见的 AggregatedDataVariants 变体，用于存储常规的聚合
+     数据。它通常包含聚合函数的中间结果，如计数、和、平均值等。
+  2. GroupingAggregatedData: 这个变体用于存储进行分组聚合时的数据。它包含了分组键和相应的聚
+     合结果，以便在合并阶段正确地组合和计算每个分组的结果。
+  3. TwoLevelAggregatedData: 这是一个特殊的 AggregatedDataVariants 变体，用于处理高基
+     数（cardinality）数据的聚合。它使用两级哈希表以优化聚合操作的性能。
+
+ 通过使用不同的 AggregatedDataVariants 变体，ClickHouse 可以根据具体的聚合操作和数据特征选择
+ 合适的存储格式，并提供高效的聚合计算能力。这有助于提高 ClickHouse 在大规模数据处理和分析任务
+ 中的性能和吞吐量。
+
+ 总而言之，AggregatedDataVariants 是 ClickHouse 中用于存储和处理聚合数据的数据结构。它提供
+ 了多种存储格式的变体，以适应不同类型的聚合操作和数据存储需求。通过选择合适的变体，ClickHouse 可
+ 以提供高效的聚合计算能力。
+ */
 struct AggregatedDataVariants : private boost::noncopyable
 {
     /** Working with states of aggregate functions in the pool is arranged in the following (inconvenient) way:
@@ -972,6 +993,7 @@ struct OutputBlockColumns;
 
 /** Aggregates the source of the blocks.
   */
+// 封装了封装了具体的聚合和合并操作
 class Aggregator final
 {
 public:
@@ -985,8 +1007,8 @@ public:
         /// What to count.
         const Names keys;
         const AggregateDescriptions aggregates;
-        const size_t keys_size;
-        const size_t aggregates_size;
+        const size_t keys_size; // group by key 的数量
+        const size_t aggregates_size; // 有多少个 aggregate 函数
 
         /// The settings of approximate calculation of GROUP BY.
         const bool overflow_row;    /// Do we need to put into AggregatedDataVariants::without_key aggregates for keys that are not in max_rows_to_group_by.

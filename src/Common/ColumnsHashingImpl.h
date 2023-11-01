@@ -139,6 +139,7 @@ public:
     FindResultImpl(bool found_, size_t off) : FindResultImplBase(found_), FindResultImplOffsetBase<need_offset>(off) {}
 };
 
+// Mapped 应该是内存，一般为 AggregateDataPtr
 template <typename Derived, typename Value, typename Mapped, bool consecutive_keys_optimization, bool need_offset = false, bool nullable = false>
 class HashMethodBase
 {
@@ -166,6 +167,7 @@ public:
                     return EmplaceResult(!has_null_key);
             }
         }
+        // 从列里面获取第 row 行
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, pool);
         return emplaceImpl(key_holder, data);
     }

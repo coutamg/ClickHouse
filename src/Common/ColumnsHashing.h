@@ -80,7 +80,7 @@ struct HashMethodOneNumber
     /// Get hash value of row.
     using Base::getHash; /// (const Data & data, size_t row, Arena & pool) -> size_t
 
-    /// Is used for default implementation in HashMethodBase.
+    /// Is used for default implementation in HashMethodBase. 拷贝出去
     FieldType getKeyHolder(size_t row, Arena &) const { return unalignedLoad<FieldType>(vec + row * sizeof(FieldType)); }
 
     const FieldType * getKeyData() const { return reinterpret_cast<const FieldType *>(vec); }

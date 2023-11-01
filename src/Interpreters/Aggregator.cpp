@@ -594,6 +594,7 @@ Aggregator::Aggregator(const Block & header_, const Params & params_)
     , min_bytes_for_prefetch(getMinBytesForPrefetch())
 {
     /// Use query-level memory tracker
+    // 记录预聚合前的内存使用，作为后续是否写入磁盘文件的依据
     if (auto * memory_tracker_child = CurrentThread::getMemoryTracker())
         if (auto * memory_tracker = memory_tracker_child->getParent())
             memory_usage_before_aggregation = memory_tracker->get();
@@ -603,6 +604,9 @@ Aggregator::Aggregator(const Block & header_, const Params & params_)
         aggregate_functions[i] = params.aggregates[i].function.get();
 
     /// Initialize sizes of aggregation states and its offsets.
+    // 每个聚合函数有个对应的State对象，该对象作为预聚合过程中内部数据的存储点，一个 sql 语句中
+    // 可以有多个聚合函数，ClickHouse 中是将多个聚合函数的State对象分配在一整块内存上的，因此，
+    // 这里需要计算每个 State 对象的大小和偏移量
     offsets_of_aggregate_states.resize(params.aggregates_size);
     total_size_of_aggregate_states = 0;
     all_aggregates_has_trivial_destructor = true;
@@ -637,6 +641,7 @@ Aggregator::Aggregator(const Block & header_, const Params & params_)
             all_aggregates_has_trivial_destructor = false;
     }
 
+    // 根据键类型选择合适的哈希表
     method_chosen = chooseAggregationMethod();
     HashMethodContext::Settings cache_settings;
     cache_settings.max_threads = params.max_threads;
@@ -835,6 +840,7 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
         }
 
         /// Fallback case.
+        // 默认选择serialized类型的哈希表，这个哈希表的键就是将多个“grouping key”拼接
         return AggregatedDataVariants::Type::serialized;
     }
 
@@ -935,6 +941,7 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
               * In order that then everything is properly destroyed, we "roll back" some of the created states.
               * The code is not very convenient.
               */
+						// 具体 agg 函数的 create
             aggregate_functions[j]->create(aggregate_data + offsets_of_aggregate_states[j]);
         }
         catch (...)
@@ -1044,6 +1051,118 @@ void Aggregator::executeImpl(
 
     if (false) {} // NOLINT
     APPLY_FOR_AGGREGATED_VARIANTS(M)
+/*
+else if (result.type == AggregatedDataVariants::Type::key8)
+	executeImpl(*result.key8, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::key16)
+	executeImpl(*result.key16, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::key32)
+	executeImpl(*result.key32, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::key64)
+	executeImpl(*result.key64, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::key_string)
+	executeImpl(*result.key_string, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::key_fixed_string)
+	executeImpl(*result.key_fixed_string, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::keys16)
+	executeImpl(*result.keys16, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::keys32)
+	executeImpl(*result.keys32, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::keys64)
+	executeImpl(*result.keys64, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::keys128)
+	executeImpl(*result.keys128, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::keys256)
+	executeImpl(*result.keys256, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::serialized)
+	executeImpl(*result.serialized, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::key32_two_level)
+	executeImpl(*result.key32_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::key64_two_level)
+	executeImpl(*result.key64_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::key_string_two_level)
+	executeImpl(*result.key_string_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::key_fixed_string_two_level)
+	executeImpl(*result.key_fixed_string_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::keys32_two_level)
+	executeImpl(*result.keys32_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::keys64_two_level)
+	executeImpl(*result.keys64_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::keys128_two_level)
+	executeImpl(*result.keys128_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::keys256_two_level)
+	executeImpl(*result.keys256_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::serialized_two_level)
+	executeImpl(*result.serialized_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::key64_hash64)
+	executeImpl(*result.key64_hash64, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::key_string_hash64)
+	executeImpl(*result.key_string_hash64, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::key_fixed_string_hash64)
+	executeImpl(*result.key_fixed_string_hash64, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::keys128_hash64)
+	executeImpl(*result.keys128_hash64, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::keys256_hash64)
+	executeImpl(*result.keys256_hash64, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::serialized_hash64)
+	executeImpl(*result.serialized_hash64, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::nullable_key8)
+	executeImpl(*result.nullable_key8, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::nullable_key16)
+	executeImpl(*result.nullable_key16, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::nullable_key32)
+	executeImpl(*result.nullable_key32, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::nullable_key64)
+	executeImpl(*result.nullable_key64, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::nullable_key32_two_level)
+	executeImpl(*result.nullable_key32_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::nullable_key64_two_level)
+	executeImpl(*result.nullable_key64_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::nullable_key_string)
+	executeImpl(*result.nullable_key_string, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::nullable_key_fixed_string)
+	executeImpl(*result.nullable_key_fixed_string, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::nullable_key_string_two_level)
+	executeImpl(*result.nullable_key_string_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::nullable_key_fixed_string_two_level)
+	executeImpl(*result.nullable_key_fixed_string_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::nullable_keys128)
+	executeImpl(*result.nullable_keys128, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::nullable_keys256)
+	executeImpl(*result.nullable_keys256, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::nullable_keys128_two_level)
+	executeImpl(*result.nullable_keys128_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::nullable_keys256_two_level)
+	executeImpl(*result.nullable_keys256_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::low_cardinality_key8)
+	executeImpl(*result.low_cardinality_key8, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::low_cardinality_key16)
+	executeImpl(*result.low_cardinality_key16, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::low_cardinality_key32)
+	executeImpl(*result.low_cardinality_key32, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::low_cardinality_key64)
+	executeImpl(*result.low_cardinality_key64, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::low_cardinality_keys128)
+	executeImpl(*result.low_cardinality_keys128, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::low_cardinality_keys256)
+	executeImpl(*result.low_cardinality_keys256, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::low_cardinality_key_string)
+	executeImpl(*result.low_cardinality_key_string, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::low_cardinality_key_fixed_string)
+	executeImpl(*result.low_cardinality_key_fixed_string, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::low_cardinality_key32_two_level)
+	executeImpl(*result.low_cardinality_key32_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::low_cardinality_key64_two_level)
+	executeImpl(*result.low_cardinality_key64_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::low_cardinality_keys128_two_level)
+	executeImpl(*result.low_cardinality_keys128_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::low_cardinality_keys256_two_level)
+	executeImpl(*result.low_cardinality_keys256_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::low_cardinality_key_string_two_level)
+	executeImpl(*result.low_cardinality_key_string_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row); 
+else if (result.type == AggregatedDataVariants::Type::low_cardinality_key_fixed_string_two_level)
+	executeImpl(*result.low_cardinality_key_fixed_string_two_level, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, all_keys_are_const, overflow_row);
+    */
     #undef M
 }
 
@@ -1053,7 +1172,7 @@ void Aggregator::executeImpl(
   */
 template <typename Method>
 void NO_INLINE Aggregator::executeImpl(
-    Method & method,
+    Method & method, // AggregationMethodxxx
     Arena * aggregates_pool,
     size_t row_begin,
     size_t row_end,
@@ -1063,7 +1182,10 @@ void NO_INLINE Aggregator::executeImpl(
     bool all_keys_are_const,
     AggregateDataPtr overflow_row) const
 {
-    typename Method::State state(key_columns, key_sizes, aggregation_state_cache);
+	// Method::State 是各种类型的 hash table，可以参考其中的 AggregationMethodOneNumber 类
+    typename Method::State state(key_columns, // ColumnRawPtrs
+	 							key_sizes,	// key_sizes
+								aggregation_state_cache); // HashMethodContextPtr
 
     if (!no_more_keys)
     {
@@ -1100,8 +1222,8 @@ void NO_INLINE Aggregator::executeImpl(
 
 template <bool no_more_keys, bool use_compiled_functions, bool prefetch, typename Method>
 void NO_INLINE Aggregator::executeImplBatch(
-    Method & method,
-    typename Method::State & state,
+    Method & method, // AggregationMethodxxx 和 state 的 xxx 名字后缀一样
+    typename Method::State & state,  // ColumnsHashing::HashMethodxxx
     Arena * aggregates_pool,
     size_t row_begin,
     size_t row_end,
@@ -1109,6 +1231,7 @@ void NO_INLINE Aggregator::executeImplBatch(
     bool all_keys_are_const,
     AggregateDataPtr overflow_row) const
 {
+		// 可以参考 HashMethodOneNumber::getKeyHolder(这只是其中一个)
     using KeyHolder = decltype(state.getKeyHolder(0, std::declval<Arena &>()));
 
     /// During processing of row #i we will prefetch HashTable cell for row #(i + prefetch_look_ahead).
@@ -1189,6 +1312,9 @@ void NO_INLINE Aggregator::executeImplBatch(
     /// - this affects only optimize_aggregation_in_order,
     /// - this is just a pointer, so it should not be significant,
     /// - and plus this will require other changes in the interface.
+    // 首先，它构造了一个 AggregateDataPtr 的数组 places，这里是这就是后续我们实际聚合结果存
+    // 放的地方。这个数据的长度也就是这个 Batch 的长度，也就是说，聚合结果的指针也作为一组列式
+    // 的数据，参与到后续的聚合运算之中
     std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[all_keys_are_const ? 1 : row_end]);
 
     /// For all rows.
@@ -1205,8 +1331,12 @@ void NO_INLINE Aggregator::executeImplBatch(
         end = row_end;
     }
 
+    // 遍历需要聚合的行，对每一行我们计算其哈希表中的键，如果这个键在哈希表中不存在，则通
+    // 过 aggregates_pool->alignedAlloc 申请一个内存块，并在内存块上初始化每个聚合函数
+    // 的 State 对象。start 是一列中第一行，end 是一列中最后一行
     for (size_t i = start; i < end; ++i)
     {
+        // 每一组 group by 的 aggregate state
         AggregateDataPtr aggregate_data = nullptr;
 
         if constexpr (!no_more_keys)
@@ -1223,6 +1353,11 @@ void NO_INLINE Aggregator::executeImplBatch(
                 }
             }
 
+            // 接下来，通过一个for循环，依次调用 state.emplaceKey，计算每列聚合 key 的hash
+            // 值，进行分类，并且将对应结果依次和 places 对应。
+						// Emplace key into HashTable or HashMap，If Data is HashMap, returns ptr to
+						// value, otherwise nullptr
+						// 将某一组计算 agg 的 state 与该列的一行绑定
             auto emplace_result = state.emplaceKey(method.data, i, *aggregates_pool);
 
             /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
@@ -1261,12 +1396,14 @@ void NO_INLINE Aggregator::executeImplBatch(
                 else
 #endif
                 {
+                   // 初始化每个聚合函数的 State
                     createAggregateStates(aggregate_data);
                 }
 
                 emplace_result.setMapped(aggregate_data);
             }
             else
+								// getMapped 返回的是某一个 gourp by 下面的 agg state
                 aggregate_data = emplace_result.getMapped();
 
             assert(aggregate_data != nullptr);
@@ -1319,6 +1456,11 @@ void NO_INLINE Aggregator::executeImplBatch(
 #endif
 
     /// Add values to the aggregate functions.
+    // 遍历聚合函数，依次执行预聚合操作（ addBatchArray / addBatchSparse / addBatch ）
+    // 最后，通过一个for循环，调用聚合函数的 addBatch 方法，每个 AggregateFunctionInstruction
+    // 都有一个制定的 places_offset 和对应属于进行聚合计算的 value 列，这里通过一个 for 循环
+    // 调用 AddBatch，将 places 之中对应的数据指针和聚合 value 列进行聚合，最终形成所有的聚
+    // 合计算的结果
     for (size_t i = 0; i < aggregate_functions.size(); ++i)
     {
 #if USE_EMBEDDED_COMPILER
@@ -1479,6 +1621,7 @@ void Aggregator::prepareAggregateInstructions(
     Columns columns,
     AggregateColumns & aggregate_columns,
     Columns & materialized_columns,
+    // 类似 pg 的 FunctionCallInfo
     AggregateFunctionInstructions & aggregate_functions_instructions,
     NestedColumnsHolder & nested_columns_holder) const
 {
@@ -1495,6 +1638,7 @@ void Aggregator::prepareAggregateInstructions(
 
         for (size_t j = 0; j < aggregate_columns[i].size(); ++j)
         {
+            // pos 应该是当前 agg 的参数所在的列
             const auto pos = header.getPositionByName(params.aggregates[i].argument_names[j]);
             materialized_columns.push_back(columns.at(pos)->convertToFullColumnIfConst());
             aggregate_columns[i][j] = materialized_columns.back().get();
@@ -1562,12 +1706,12 @@ bool Aggregator::executeOnBlock(const Block & block,
         no_more_keys);
 }
 
-
+// 执行预聚合的接口
 bool Aggregator::executeOnBlock(Columns columns,
     size_t row_begin, size_t row_end,
     AggregatedDataVariants & result,
     ColumnRawPtrs & key_columns,
-    AggregateColumns & aggregate_columns,
+    AggregateColumns & aggregate_columns, // 哪个 agg 需要哪些列
     bool & no_more_keys) const
 {
     /// `result` will destroy the states of aggregate functions in the destructor
@@ -1576,6 +1720,9 @@ bool Aggregator::executeOnBlock(Columns columns,
     /// How to perform the aggregation?
     if (result.empty())
     {
+        // result（类型AggregatedDataVariants）是一个out型参数，实际的哈希表也是在这个对象
+        // 中，这里会执行初始化操作，即根据 aggregator 选择的哈希表类型来初始化对应的哈希表，
+        // 直接将各种哈希表硬编码进 AggregatedDataVariants 类型中
         initDataVariantsWithSizeHint(result, method_chosen, params);
         result.keys_size = params.keys_size;
         result.key_sizes = key_sizes;
@@ -1585,6 +1732,8 @@ bool Aggregator::executeOnBlock(Columns columns,
     /** Constant columns are not supported directly during aggregation.
       * To make them work anyway, we materialize them.
       */
+    // ClickHouse 中有些列不能在聚合操作中直接使用，比如Const Column、Sparse Column等。这
+    // 里对“grouping key”中这些列做了具化处理（即格式转换为普通格式）
     Columns materialized_columns;
     bool all_keys_are_const = false;
     if (params.optimize_group_by_constant_keys)
@@ -1621,6 +1770,7 @@ bool Aggregator::executeOnBlock(Columns columns,
 
     NestedColumnsHolder nested_columns_holder;
     AggregateFunctionInstructions aggregate_functions_instructions;
+    // 聚合函数的参数拼接的过程，聚合函数的参数，根据名字找到对应的列数据
     prepareAggregateInstructions(columns, aggregate_columns, materialized_columns, aggregate_functions_instructions, nested_columns_holder);
 
     if ((params.overflow_row || result.type == AggregatedDataVariants::Type::without_key) && !result.without_key)
@@ -1644,6 +1794,7 @@ bool Aggregator::executeOnBlock(Columns columns,
 //         else
 // #endif
         {
+            // 实际上是没有group by语句时的聚合操作
             executeWithoutKeyImpl<false>(result.without_key, row_begin, row_end, aggregate_functions_instructions.data(), result.aggregates_pool);
         }
     }
